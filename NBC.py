@@ -66,6 +66,8 @@ class NaiveBayesDiscrete(BaseEstimator, ClassifierMixin):
                 class_probs[cls] *= self.feature_probs[i][cls].get(val, 1e-6)
         return max(class_probs, key=class_probs.get)
 
+
+np.random.seed(0)
 # Завантаження набору даних Wine
 data = load_wine()
 X = data.data
