@@ -1,7 +1,6 @@
 import numpy as np
-import pandas as pd
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score, classification_report
+from sklearn.metrics import accuracy_score
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.base import BaseEstimator, ClassifierMixin
 from collections import defaultdict
@@ -74,34 +73,38 @@ class NaiveBayesDiscrete(BaseEstimator, ClassifierMixin):
             probabilities = {cls: prob / total for cls, prob in class_probs.items()}
         return probabilities
 
-def discretize(data, bins):
-    return pd.qcut(data, q=bins, labels=False, duplicates="drop").astype(int)
+def read_spambase_data(path):
+    data = np.genfromtxt(path, delimiter=",")
+    X = data[:, :-1]
+    y = data[:, -1].astype(int)
+    return X, y
 
-# Load dataset from file
-file_path = "C:/ZUT/spambase.data"   # Path to the dataset file
-column_names = [f"feature_{i}" for i in range(1, 58)] + ["class"]
-data = pd.read_csv(file_path, header=None, names=column_names)
+def discretize_data(data, bins):
+    discretized = np.zeros_like(data, dtype=int)
+    for i in range(data.shape[1]):
+        discretized[:, i] = np.digitize(data[:, i], bins=np.linspace(0, 1, bins)) - 1
+    return discretized
 
-# Split features and target
-X = data.drop("class", axis=1).values
-y = data["class"].values
+# Load dataset
+file_path = "C:/ZUT/spambase.data"  # Path to the dataset file
+X, y = read_spambase_data(file_path)
 
 # Normalize data
 scaler = MinMaxScaler()
 X_normalized = scaler.fit_transform(X)
 
-# Discrete data experiments
-bins_list = [20]  # Experiment with different bin sizes
+# Experiments
+bins_list = [20]
 laplace_smoothing_values = [True, False]
 
 for bins in bins_list:
     for laplace_smoothing in laplace_smoothing_values:
-        X_discretized = np.apply_along_axis(discretize, axis=0, arr=X_normalized, bins=bins)
+        X_discretized = discretize_data(X_normalized, bins)
         X_train, X_test, y_train, y_test = train_test_split(X_discretized, y, test_size=0.3, random_state=42)
 
         # Add rare values to test set to test Laplace smoothing
-        X_test[0, 0] = np.max(X_train[:, 0]) + 1
-        X_test[1, 1] = np.max(X_train[:, 1]) + 1
+        X_test[0, 0] = bins  # Value not in training set
+        X_test[1, 1] = bins
 
         nb_discrete = NaiveBayesDiscrete(laplace_smoothing=laplace_smoothing, use_logarithms=False)
         nb_discrete.fit(X_train, y_train)
@@ -116,9 +119,9 @@ for bins in bins_list:
         print(f"Dokładność na zbiorze uczącym: {train_accuracy:.2f}%")
         print(f"Dokładność na zbiorze testowym: {test_accuracy:.2f}%")
 
-# Numerical stability experiment with duplicated features
+# Numerical stability experiment
 X_dangerous = np.hstack([X_normalized] * 10)
-X_discretized_dangerous = np.apply_along_axis(discretize, axis=0, arr=X_dangerous, bins=5)
+X_discretized_dangerous = discretize_data(X_dangerous, 5)
 X_train, X_test, y_train, y_test = train_test_split(X_discretized_dangerous, y, test_size=0.3, random_state=42)
 
 nb_safe = NaiveBayesDiscrete(laplace_smoothing=True, use_logarithms=True)
